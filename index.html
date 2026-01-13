@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Terminal // Simulação</title>
+  <style>
+    :root{
+      --bg:#050607;
+      --panel:#07110a;
+      --green:#31ff5c;
+      --green2:#12c942;
+      --muted:rgba(49,255,92,.65);
+      --danger:#ff3b3b;
+      --shadow:rgba(49,255,92,.25);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      background:
+        radial-gradient(1200px 700px at 60% 20%, rgba(49,255,92,.08), transparent 60%),
+        radial-gradient(900px 500px at 20% 80%, rgba(49,255,92,.06), transparent 55%),
+        linear-gradient(180deg, #020304, var(--bg));
+      color:var(--green);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      transition: filter .2s ease;
+    }
+
+    .wrap{ width:min(980px, 100%); position:relative; }
+
+    .topNote{
+      position:absolute;
+      left:0;
+      top:-12px;
+      transform:translateY(-100%);
+      padding:10px 14px;
+      border:2px solid var(--green2);
+      background:rgba(0,0,0,.35);
+      box-shadow:0 0 18px var(--shadow);
+      border-radius:10px;
+      color:var(--muted);
+      font-size:13px;
+      user-select:none;
+    }
+
+    .hud{
+      position:absolute;
+      right:0;
+      top:-12px;
+      transform:translateY(-100%);
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+
+    .pill{
+      border:2px solid var(--green2);
+      background:rgba(0,0,0,.35);
+      box-shadow:0 0 18px var(--shadow);
+      padding:10px 14px;
+      border-radius:999px;
+      color:var(--muted);
+      font-size:13px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+      user-select:none;
+    }
+
+    .ring{
+      width:44px;
+      height:44px;
+      border-radius:999px;
+      border:3px solid var(--green2);
+      position:relative;
+      display:grid;
+      place-items:center;
+      box-shadow:0 0 18px var(--shadow);
+      background:rgba(0,0,0,.35);
+      color:var(--green);
+      font-weight:700;
+      font-size:12px;
+      user-select:none;
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    .ring::after{
+      content:"";
+      position:absolute;
+      inset:6px;
+      border-radius:999px;
+      border:2px solid rgba(49,255,92,.2);
+    }
+
+    .terminal{
+      border:3px solid var(--green2);
+      border-radius:14px;
+      background:linear-gradient(180deg, rgba(7,17,10,.95), rgba(0,0,0,.65));
+      box-shadow:0 0 28px var(--shadow);
+      overflow:hidden;
+      transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+
+    .terminalInner{ padding:18px 18px 12px; }
+
+    /* ✅ anti-cópia/seleção no painel de linhas */
+    .lines, .row, .cmd, .idx{
+      user-select:none;
+      -webkit-user-select:none;
+      -ms-user-select:none;
+    }
+
+    .lines{
+      border:2px solid rgba(49,255,92,.25);
+      border-radius:12px;
+      overflow:hidden;
+      background:rgba(0,0,0,.25);
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns:44px 1fr;
+      gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(49,255,92,.14);
+      align-items:center;
+      font-size:14px;
+    }
+    .row:last-child{border-bottom:none}
+
+    .idx{
+      width:34px;
+      height:28px;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(49,255,92,.25);
+      border-radius:6px;
+      color:rgba(49,255,92,.8);
+      background:rgba(0,0,0,.25);
+      font-weight:700;
+    }
+
+    .cmd{
+      color:rgba(49,255,92,.85);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .row.done .cmd{
+      color:rgba(49,255,92,1);
+      text-shadow:0 0 10px rgba(49,255,92,.25);
+    }
+    .row.done .idx{ border-color:rgba(49,255,92,.55); }
+
+    /* ✅ Linha atual destacada */
+    .row.current{
+      background:rgba(49,255,92,.06);
+      box-shadow: inset 0 0 0 9999px rgba(49,255,92,.05);
+    }
+    .row.current .cmd{ color:rgba(49,255,92,1); }
+
+    /* ✅ Linhas futuras com blur + opacidade */
+    .row.future .cmd{
+      filter: blur(3px);
+      opacity: .35;
+    }
+
+    .inputArea{
+      margin-top:14px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      border-top:1px solid rgba(49,255,92,.18);
+      padding-top:14px;
+    }
+
+    .prompt{
+      color:rgba(49,255,92,.9);
+      font-weight:800;
+      user-select:none;
+    }
+
+    input{
+      flex:1;
+      background:rgba(0,0,0,.35);
+      border:2px solid rgba(49,255,92,.35);
+      border-radius:12px;
+      padding:12px 14px;
+      color:var(--green);
+      outline:none;
+      font-size:14px;
+      box-shadow:0 0 16px rgba(49,255,92,.12);
+    }
+    input:focus{
+      border-color:rgba(49,255,92,.7);
+      box-shadow:0 0 22px rgba(49,255,92,.18);
+    }
+
+    button{
+      background:rgba(49,255,92,.12);
+      border:2px solid rgba(49,255,92,.45);
+      color:var(--green);
+      border-radius:12px;
+      padding:12px 14px;
+      font-weight:800;
+      cursor:pointer;
+      box-shadow:0 0 16px rgba(49,255,92,.12);
+      user-select:none;
+    }
+    button:hover{
+      background:rgba(49,255,92,.16);
+      border-color:rgba(49,255,92,.7);
+    }
+    button:disabled{
+      opacity:.5;
+      cursor:not-allowed;
+    }
+
+    .status{
+      margin-top:12px;
+      min-height:22px;
+      color:var(--muted);
+      font-size:13px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .status .err{ color:rgba(255,59,59,.95); }
+    .status .ok{ color:rgba(49,255,92,.95); }
+
+    .kbd{
+      display:inline-block;
+      padding:2px 7px;
+      border:1px solid rgba(49,255,92,.35);
+      border-radius:7px;
+      background:rgba(0,0,0,.35);
+      font-size:12px;
+      color:rgba(49,255,92,.85);
+    }
+
+    /* Overlay padrão */
+    .overlay{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,.85);
+      z-index:999;
+      padding:24px;
+    }
+    .overlay.show{display:flex}
+
+    .modal{
+      width:min(720px, 100%);
+      border:3px solid var(--green2);
+      border-radius:16px;
+      background:linear-gradient(180deg, rgba(7,17,10,.95), rgba(0,0,0,.7));
+      box-shadow:0 0 38px var(--shadow);
+      padding:22px;
+      text-align:center;
+    }
+
+    .big{
+      font-size:48px;
+      letter-spacing:1px;
+      margin:0 0 10px;
+      user-select:none;
+    }
+    .sub{
+      margin:0 0 18px;
+      color:rgba(49,255,92,.75);
+      font-size:14px;
+      line-height:1.5;
+      user-select:none;
+    }
+
+    .modal.error{
+      border-color:rgba(255,59,59,.9);
+      box-shadow:0 0 38px rgba(255,59,59,.18);
+    }
+    .modal.error .big{ color:rgba(255,59,59,.95); }
+    .modal.error .sub{ color:rgba(255,59,59,.75); }
+
+    /* Tela de imagem fullscreen (ACESSAR) */
+    .accessScreen{
+      position:fixed;
+      inset:0;
+      display:none;
+      z-index:2000;
+      background:#000;
+    }
+    .accessScreen.show{ display:block; }
+
+    .accessScreen img{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+    }
+
+    .accessHint{
+      position:absolute;
+      left:50%;
+      bottom:18px;
+      transform:translateX(-50%);
+      padding:8px 12px;
+      border:1px solid rgba(49,255,92,.35);
+      background:rgba(0,0,0,.35);
+      border-radius:999px;
+      color:rgba(49,255,92,.8);
+      font-size:12px;
+      user-select:none;
+      backdrop-filter: blur(4px);
+    }
+
+    /* 🔥 Pressão final: piscar nos últimos 10s */
+    @keyframes panicPulse {
+      0%   { filter: none; }
+      50%  { filter: drop-shadow(0 0 12px rgba(255,59,59,.35)) saturate(1.2); }
+      100% { filter: none; }
+    }
+    body.panic {
+      animation: panicPulse .6s infinite;
+    }
+    body.panic .terminal{
+      border-color: rgba(255,59,59,.85);
+      box-shadow: 0 0 42px rgba(255,59,59,.18);
+      transform: translateY(-1px);
+    }
+    body.panic .ring{
+      border-color: rgba(255,59,59,.85);
+      box-shadow: 0 0 26px rgba(255,59,59,.18);
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topNote">/* aguardando execução dos comandos... */</div>
+
+    <div class="hud">
+      <div class="pill">
+        <span>linha</span>
+        <strong id="progress">1/6</strong>
+      </div>
+      <div class="ring" id="timerRing" title="Tempo restante">
+        <span id="timer">90</span>
+      </div>
+    </div>
+
+    <div class="terminal" role="application" aria-label="Terminal">
+      <div class="terminalInner">
+        <div class="lines" id="lines" aria-label="Lista de comandos"></div>
+
+        <div class="inputArea">
+          <div class="prompt">&gt;</div>
+          <input id="input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="Digite exatamente a linha atual e pressione Enter…" />
+          <button id="send">ENVIAR</button>
+        </div>
+
+        <div class="status">
+          <div id="hint">Dica: use <span class="kbd">Enter</span> para enviar.</div>
+          <div id="msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay INÍCIO -->
+  <div class="overlay show" id="startOverlay">
+    <div class="modal">
+      <p class="big">INICIAR</p>
+      <p class="sub">Clique para começar. O tempo e os sons de pressão só começam depois disso.</p>
+      <button id="startBtn">INICIAR</button>
+    </div>
+  </div>
+
+  <!-- Overlay SUCESSO / ERROR -->
+  <div class="overlay" id="overlay">
+    <div class="modal" id="modal">
+      <p class="big" id="modalTitle">SUCESSO :)</p>
+      <p class="sub" id="modalText">Sequência completa.</p>
+      <button id="accessBtn">ACESSAR</button>
+    </div>
+  </div>
+
+  <!-- Tela de imagem fullscreen (após ACESSAR) -->
+  <div class="accessScreen" id="accessScreen" aria-label="Acesso liberado">
+    <img id="accessImg" alt="Acesso liberado" />
+    <div class="accessHint">clique para sair</div>
+  </div>
+
+  <script>
+    // ✅ Linhas do desafio (fictícias/seguras). Troque à vontade.
+    const SCRIPT_LINES = [
+      "access-token=********-********-********",
+      "chmod +x init_module && ./init_module -f payload.dat",
+      "python -c \"print('handshake ok')\"",
+      "probe --target http://sistema.local --check",
+      "mv /tmp/cache.bin /usr/local/bin/runner",
+      "elevate_mode /inject /silent"
+    ];
+
+    const TOTAL_TIME = 90; // segundos
+
+    // ✅ Troque aqui pela sua imagem (URL, caminho local, ou base64)
+    const ACCESS_IMAGE_URL = "https://cdn.discordapp.com/attachments/1451007288033939466/1460731553012387920/9d308aa4-f1be-49b7-a14b-ea6ed172bbd3.png?ex=6967fbc5&is=6966aa45&hm=34d86ca34ded40e11ba0f755404f3db606396784f75097302090b2534ada5276&";
+
+    const els = {
+      lines: document.getElementById("lines"),
+      input: document.getElementById("input"),
+      send: document.getElementById("send"),
+      msg: document.getElementById("msg"),
+      progress: document.getElementById("progress"),
+      timer: document.getElementById("timer"),
+      overlay: document.getElementById("overlay"),
+      modal: document.getElementById("modal"),
+      modalTitle: document.getElementById("modalTitle"),
+      modalText: document.getElementById("modalText"),
+      accessBtn: document.getElementById("accessBtn"),
+      accessScreen: document.getElementById("accessScreen"),
+      accessImg: document.getElementById("accessImg"),
+
+      startOverlay: document.getElementById("startOverlay"),
+      startBtn: document.getElementById("startBtn"),
+    };
+
+    let currentIndex = 0;
+    let remaining = TOTAL_TIME;
+    let timerId = null;
+    let finished = false;
+    let started = false;
+
+    // -----------------------------
+    // 🔊 Áudio (Web Audio)
+    // -----------------------------
+    let audioCtx = null;
+    let lastClickAt = 0;
+
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    }
+
+    // Tecla (ruído curto)
+    function keyClick() {
+      const now = performance.now();
+      if (now - lastClickAt < 18) return;
+      lastClickAt = now;
+
+      if (!audioCtx) return;
+
+      const t = audioCtx.currentTime;
+      const bufferSize = Math.floor(audioCtx.sampleRate * 0.02); // 20ms
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+      }
+
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = "highpass";
+      filter.frequency.setValueAtTime(1200 + Math.random() * 800, t);
+
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.16 + Math.random() * 0.07, t + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      noise.start(t);
+      noise.stop(t + 0.025);
+    }
+
+    // Tick por segundo (osc curto) - aumenta pressão nos últimos 15s
+    function playTick() {
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      const freq =
+        remaining <= 5  ? 1400 :
+        remaining <= 10 ? 1150 :
+        remaining <= 15 ? 900  : 650;
+
+      osc.type = "square";
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.055, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.09);
+    }
+
+    // Beep longo no último segundo
+    function playLastSecondBeep() {
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, t);
+      osc.frequency.exponentialRampToValueAtTime(1320, t + 0.35);
+
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.5);
+    }
+
+    // Som de sucesso (tríade rápida)
+    function playSuccessSound() {
+      if (!audioCtx) return;
+      const base = audioCtx.currentTime;
+
+      const notes = [523.25, 659.25, 783.99]; // C5 E5 G5
+      notes.forEach((f, i) => {
+        const t = base + i * 0.09;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(f, t);
+
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.14, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(t);
+        osc.stop(t + 0.2);
+      });
+    }
+
+    // Som de erro (alarme grave descendente)
+    function playErrorSound() {
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(220, t);
+      osc.frequency.exponentialRampToValueAtTime(110, t + 0.55);
+
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.75);
+    }
+
+    // -----------------------------
+    // UI
+    // -----------------------------
+    function renderLines() {
+      els.lines.innerHTML = "";
+      SCRIPT_LINES.forEach((cmd, i) => {
+        const row = document.createElement("div");
+        row.className = "row";
+
+        if (i < currentIndex) row.classList.add("done");
+        else if (i === currentIndex && !finished) row.classList.add("current");
+        else row.classList.add("future");
+
+        const idx = document.createElement("div");
+        idx.className = "idx";
+        idx.textContent = (i + 1);
+
+        const text = document.createElement("div");
+        text.className = "cmd";
+        text.textContent = cmd;
+
+        row.appendChild(idx);
+        row.appendChild(text);
+        els.lines.appendChild(row);
+      });
+
+      els.progress.textContent = `${Math.min(currentIndex + 1, SCRIPT_LINES.length)}/${SCRIPT_LINES.length}`;
+    }
+
+    function setMessage(text, kind = "") {
+      els.msg.className = kind ? kind : "";
+      els.msg.textContent = text;
+    }
+
+    function normalize(s) {
+      return (s ?? "").trim();
+    }
+
+    function lockUI(locked) {
+      els.input.disabled = locked;
+      els.send.disabled = locked;
+    }
+
+    function stopTimer() {
+      if (timerId) clearInterval(timerId);
+      timerId = null;
+      document.body.classList.remove("panic");
+    }
+
+    function updatePanicUI() {
+      if (!started || finished) return;
+      if (remaining <= 10 && remaining > 0) document.body.classList.add("panic");
+      else document.body.classList.remove("panic");
+    }
+
+    function startTimer() {
+      stopTimer();
+      remaining = TOTAL_TIME;
+      els.timer.textContent = remaining;
+      updatePanicUI();
+
+      // (opcional) um tick já no start, pra “entrar no clima”
+      playTick();
+
+      timerId = setInterval(() => {
+        if (finished) return;
+
+        remaining -= 1;
+        els.timer.textContent = remaining;
+
+        updatePanicUI();
+
+        // 🔊 tick a cada segundo (enquanto ainda tem tempo)
+        if (remaining > 0) playTick();
+
+        // 🔊 beep longo no último segundo (quando aparece "1")
+        if (remaining === 1) playLastSecondBeep();
+
+        if (remaining <= 0) {
+          stopTimer();
+          finished = true;
+          lockUI(true);
+          setMessage("Tempo esgotado.", "err");
+          playErrorSound();          // 🔊 som de erro
+          showResult("timeout");
+        }
+      }, 1000);
+    }
+
+    function showResult(type) {
+      els.overlay.classList.add("show");
+
+      if (type === "success") {
+        els.modal.classList.remove("error");
+        els.modalTitle.textContent = "SUCESSO :)";
+        els.modalText.textContent = "Sequência completa.";
+        els.accessBtn.style.display = "inline-block";
+      } else {
+        // ✅ sem botão ao fracassar
+        els.modal.classList.add("error");
+        els.modalTitle.textContent = "ERROR";
+        els.modalText.textContent = "tempo excedido";
+        els.accessBtn.style.display = "none";
+      }
+    }
+
+    function hideResult() {
+      els.overlay.classList.remove("show");
+    }
+
+    function submit() {
+      if (!started || finished) return;
+
+      const typed = normalize(els.input.value);
+      const expected = normalize(SCRIPT_LINES[currentIndex]);
+
+      if (!typed) {
+        setMessage("Digite a linha atual.", "err");
+        return;
+      }
+
+      if (typed === expected) {
+        currentIndex += 1;
+        els.input.value = "";
+        setMessage("Linha aprovada ✓", "ok");
+
+        if (currentIndex >= SCRIPT_LINES.length) {
+          finished = true;
+          stopTimer();
+          lockUI(true);
+          renderLines();
+
+          playSuccessSound();       // 🔊 som de sucesso
+          showResult("success");
+          return;
+        }
+
+        renderLines();
+        els.input.focus();
+      } else {
+        setMessage("Linha incorreta. Tente novamente a linha atual.", "err");
+        els.input.select();
+      }
+    }
+
+    // -----------------------------
+    // ✅ ACESSAR => imagem fullscreen
+    // -----------------------------
+    function showAccess() {
+      els.accessImg.src = ACCESS_IMAGE_URL;
+      els.accessScreen.classList.add("show");
+    }
+
+    function hideAccess() {
+      els.accessScreen.classList.remove("show");
+      els.accessImg.src = "";
+    }
+
+    // -----------------------------
+    // 🛡️ Anti-cópia / anti-colar
+    // -----------------------------
+    function blockCopyArea(e) {
+      e.preventDefault();
+      return false;
+    }
+
+    ["copy","cut","contextmenu","dragstart","selectstart"].forEach(evt => {
+      els.lines.addEventListener(evt, blockCopyArea);
+    });
+
+    els.input.addEventListener("paste", (e) => {
+      e.preventDefault();
+      setMessage("Colar está desativado. Digite manualmente.", "err");
+    });
+
+    ["drop","dragover"].forEach(evt => {
+      els.input.addEventListener(evt, (e) => e.preventDefault());
+    });
+
+    // -----------------------------
+    // Eventos
+    // -----------------------------
+    els.startBtn.addEventListener("click", () => {
+      ensureAudio();
+      started = true;
+      finished = false;
+      currentIndex = 0;
+
+      els.startOverlay.classList.remove("show");
+      lockUI(false);
+      setMessage("");
+      renderLines();
+      startTimer();
+      els.input.focus();
+    });
+
+    els.send.addEventListener("click", () => {
+      ensureAudio();
+      submit();
+    });
+
+    els.input.addEventListener("keydown", (e) => {
+      ensureAudio();
+
+      const ignoreKeys = new Set(["Shift","Alt","Control","Meta","CapsLock","Tab"]);
+      if (!ignoreKeys.has(e.key)) keyClick();
+
+      if (e.key === "Enter") submit();
+    });
+
+    els.accessBtn.addEventListener("click", () => {
+      ensureAudio();
+      hideResult();
+      showAccess();
+    });
+
+    els.accessScreen.addEventListener("click", () => {
+      hideAccess();
+    });
+
+    // Init (não começa automaticamente)
+    renderLines();
+    lockUI(true);
+    els.timer.textContent = TOTAL_TIME;
+  </script>
+</body>
+</html>
